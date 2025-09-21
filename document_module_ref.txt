@@ -1,0 +1,324 @@
+ document()
+提供默认文档页面的重定向接口。
+
+Returns:
+
+RedirectResponse: 重定向到 /docs 页面。
+Source code in lazyllm/tools/rag/doc_manager.py
+
+    @app.get('/', response_model=BaseResponse, summary='docs')
+    def document(self):
+        """
+提供默认文档页面的重定向接口。
+
+**Returns:**
+
+- RedirectResponse: 重定向到 `/docs` 页面。
+"""
+        return RedirectResponse(url='/docs')
+ list_files(limit=None, details=True, alive=None)
+列出已上传文件的接口。
+
+Parameters:
+
+limit (Optional[int], default: None ) – 返回的文件数量限制。默认为None。
+details (bool, default: True ) – 是否返回详细信息。默认为True。
+alive (Optional[bool], default: None ) – 如果为True，只返回未删除的文件。默认为None。
+Returns:
+
+BaseResponse: 文件列表数据。
+Source code in lazyllm/tools/rag/doc_manager.py
+
+    @app.get('/list_files')
+    def list_files(self, limit: Optional[int] = None, details: bool = True, alive: Optional[bool] = None):
+        """
+列出已上传文件的接口。
+
+Args:
+    limit (Optional[int]): 返回的文件数量限制。默认为None。
+    details (bool): 是否返回详细信息。默认为True。
+    alive (Optional[bool]): 如果为True，只返回未删除的文件。默认为None。
+
+**Returns:**
+
+- BaseResponse: 文件列表数据。
+"""
+        try:
+            status = [DocListManager.Status.success, DocListManager.Status.waiting, DocListManager.Status.working,
+                      DocListManager.Status.failed] if alive else DocListManager.Status.all
+            return BaseResponse(data=self._manager.list_files(limit=limit, details=details, status=status))
+        except Exception as e:
+            return BaseResponse(code=500, msg=str(e), data=None)
+ list_files_in_group(group_name=None, limit=None, alive=None)
+列出指定分组中文件的接口。
+
+Parameters:
+
+group_name (Optional[str], default: None ) – 文件分组名称。
+limit (Optional[int], default: None ) – 返回的文件数量限制。默认为None。
+alive (Optional[bool], default: None ) – 是否只返回未删除的文件。
+Returns:
+
+BaseResponse: 分组文件列表。
+Source code in lazyllm/tools/rag/doc_manager.py
+
+    @app.get('/list_files_in_group')
+    def list_files_in_group(self, group_name: Optional[str] = None,
+                            limit: Optional[int] = None, alive: Optional[bool] = None):
+        """
+列出指定分组中文件的接口。
+
+Args:
+    group_name (Optional[str]): 文件分组名称。
+    limit (Optional[int]): 返回的文件数量限制。默认为None。
+    alive (Optional[bool]): 是否只返回未删除的文件。
+
+**Returns:**
+
+- BaseResponse: 分组文件列表。
+"""
+        try:
+            status = [DocListManager.Status.success, DocListManager.Status.waiting, DocListManager.Status.working,
+                      DocListManager.Status.failed] if alive else DocListManager.Status.all
+            return BaseResponse(data=self._manager.list_kb_group_files(group_name, limit, details=True, status=status))
+        except Exception as e:
+            return BaseResponse(code=500, msg=str(e) + '\ntraceback:\n' + str(traceback.format_exc()), data=None)
+ list_kb_groups()
+列出所有文档分组的接口。
+
+Returns:
+
+BaseResponse: 包含所有文档分组的数据。
+Source code in lazyllm/tools/rag/doc_manager.py
+
+    @app.get('/list_kb_groups')
+    def list_kb_groups(self):
+        """
+列出所有文档分组的接口。
+
+**Returns:**
+
+- BaseResponse: 包含所有文档分组的数据。
+"""
+        try:
+            return BaseResponse(data=self._manager.list_all_kb_group())
+        except Exception as e:
+            return BaseResponse(code=500, msg=str(e), data=None)
+ query_metadata(query_metadata_request)
+查询指定文档的元数据。
+
+Parameters:
+
+query_metadata_request (QueryMetadataRequest) – 请求参数，包含文档ID和可选的字段名。
+Returns:
+
+BaseResponse: 若指定了 key 且存在，返回对应字段值；否则返回整个 metadata；key 不存在时报错。
+Source code in lazyllm/tools/rag/doc_manager.py
+
+    @app.post('/query_metadata')
+    def query_metadata(self, query_metadata_request: QueryMetadataRequest):
+        """
+查询指定文档的元数据。
+
+Args:
+    query_metadata_request (QueryMetadataRequest): 请求参数，包含文档ID和可选的字段名。
+
+**Returns:**
+
+- BaseResponse: 若指定了 key 且存在，返回对应字段值；否则返回整个 metadata；key 不存在时报错。
+"""
+        doc_id = query_metadata_request.doc_id
+        key = query_metadata_request.key
+        try:
+            docs = self._manager.get_docs(doc_id)
+            if not docs:
+                return BaseResponse(data=None)
+            doc = docs[0]
+            meta_dict = json.loads(doc.meta) if doc.meta else {}
+            if not key:
+                return BaseResponse(data=meta_dict)
+            if key not in meta_dict:
+                return BaseResponse(code=400, msg=f'Failed, key {key} does not exist')
+            return BaseResponse(data=meta_dict[key])
+        except Exception as e:
+            return BaseResponse(code=500, msg=str(e), data=None)
+ reparse_files(file_ids, group_name=None)
+重新解析指定的文件。
+
+Parameters:
+
+file_ids (List[str]) – 需要重新解析的文件ID列表。
+group_name (Optional[str], default: None ) – 文件组名称，默认为None。
+Returns:
+
+BaseResponse: 包含以下字段的响应对象：
+code (int): 状态码，200表示成功。
+msg (str): 错误信息（如果有）。
+data: None。
+Source code in lazyllm/tools/rag/doc_manager.py
+
+    @app.get('/reparse_files')
+    def reparse_files(self, file_ids: List[str], group_name: Optional[str] = None):
+        """重新解析指定的文件。
+
+Args:
+    file_ids (List[str]): 需要重新解析的文件ID列表。
+    group_name (Optional[str]): 文件组名称，默认为None。
+
+**Returns:**
+
+- BaseResponse: 包含以下字段的响应对象：
+    - code (int): 状态码，200表示成功。
+    - msg (str): 错误信息（如果有）。
+    - data: None。
+"""
+        try:
+            self._manager.update_need_reparsing(file_ids, group_name)
+            return BaseResponse()
+        except Exception as e:
+            return BaseResponse(code=500, msg=str(e), data=None)
+ reset_metadata(reset_metadata_request)
+重置指定文档的所有元数据字段。
+
+Parameters:
+
+reset_metadata_request (ResetMetadataRequest) – 包含文档ID列表和新的元数据字典。
+Returns:
+
+BaseResponse: 操作结果信息。
+Source code in lazyllm/tools/rag/doc_manager.py
+
+    @app.post('/reset_metadata')
+    def reset_metadata(self, reset_metadata_request: ResetMetadataRequest):
+        """
+重置指定文档的所有元数据字段。
+
+Args:
+    reset_metadata_request (ResetMetadataRequest): 包含文档ID列表和新的元数据字典。
+
+**Returns:**
+
+- BaseResponse: 操作结果信息。
+"""
+        doc_ids = reset_metadata_request.doc_ids
+        new_meta = reset_metadata_request.new_meta
+        try:
+            docs = self._manager.get_docs(doc_ids)
+            if not docs:
+                return BaseResponse(code=400, msg='Failed, no doc found')
+            self._manager.set_docs_new_meta({doc.doc_id: new_meta for doc in docs})
+            return BaseResponse(data=None)
+        except Exception as e:
+            return BaseResponse(code=500, msg=str(e), data=None)
+ update_or_create_metadata_keys(update_metadata_request)
+更新或创建文档元数据字段的接口。
+
+Parameters:
+
+update_metadata_request (UpdateMetadataRequest) – 包含文档ID列表和需更新或新增的键值对元数据。
+Returns:
+
+BaseResponse: 操作结果信息。
+Source code in lazyllm/tools/rag/doc_manager.py
+
+    @app.post('/update_or_create_metadata_keys')
+    def update_or_create_metadata_keys(self, update_metadata_request: UpdateMetadataRequest):
+        """
+更新或创建文档元数据字段的接口。
+
+Args:
+    update_metadata_request (UpdateMetadataRequest): 包含文档ID列表和需更新或新增的键值对元数据。
+
+**Returns:**
+
+- BaseResponse: 操作结果信息。
+"""
+        doc_ids = update_metadata_request.doc_ids
+        kv_pair = update_metadata_request.kv_pair
+        try:
+            docs = self._manager.get_docs(doc_ids)
+            if not docs:
+                return BaseResponse(code=400, msg='Failed, no doc found')
+            for doc in docs:
+                doc_meta = {}
+                meta_dict = json.loads(doc.meta) if doc.meta else {}
+                for k, v in kv_pair.items():
+                    meta_dict[k] = v
+                doc_meta[doc.doc_id] = meta_dict
+            self._manager.set_docs_new_meta(doc_meta)
+            return BaseResponse(data=None)
+        except Exception as e:
+            return BaseResponse(code=500, msg=str(e), data=None)
+ upload_files(files, override=False, metadatas=None, user_path=None)
+上传文件并更新其状态的接口。可以同时上传多个文件。
+
+Parameters:
+
+files (List[UploadFile]) – 上传的文件列表。
+override (bool, default: False ) – 是否覆盖已存在的文件。默认为False。
+metadatas (Optional[str], default: None ) – 文件的元数据，JSON格式。
+user_path (Optional[str], default: None ) – 用户自定义的文件上传路径。
+Returns:
+
+BaseResponse: 上传结果和文件ID。
+Source code in lazyllm/tools/rag/doc_manager.py
+
+    @app.post('/upload_files')
+    def upload_files(self, files: List['fastapi.UploadFile'], override: bool = False,  # noqa C901
+                     metadatas: Optional[str] = None, user_path: Optional[str] = None):
+        """
+上传文件并更新其状态的接口。可以同时上传多个文件。
+
+Args:
+    files (List[UploadFile]): 上传的文件列表。
+    override (bool): 是否覆盖已存在的文件。默认为False。
+    metadatas (Optional[str]): 文件的元数据，JSON格式。
+    user_path (Optional[str]): 用户自定义的文件上传路径。
+
+**Returns:**
+
+- BaseResponse: 上传结果和文件ID。
+"""
+        try:
+            if user_path: user_path = user_path.lstrip('/')
+            if metadatas:
+                metadatas: Optional[List[Dict[str, str]]] = json.loads(metadatas)
+                if len(files) != len(metadatas):
+                    return BaseResponse(code=400, msg='Length of files and metadatas should be the same',
+                                        data=None)
+                for idx, mt in enumerate(metadatas):
+                    err_msg = self._validate_metadata(mt)
+                    if err_msg:
+                        return BaseResponse(code=400, msg=f'file [{files[idx].filename}]: {err_msg}', data=None)
+            file_paths = [os.path.join(self._manager._path, user_path or '', file.filename) for file in files]
+            paths_is_new = [True] * len(file_paths)
+            if override is True:
+                is_success, msg, paths_is_new = self._manager.validate_paths(file_paths)
+                if not is_success:
+                    return BaseResponse(code=500, msg=msg, data=None)
+            directorys = set(os.path.dirname(path) for path in file_paths)
+            [os.makedirs(directory, exist_ok=True) for directory in directorys if directory]
+            ids, results = [], []
+            for i in range(len(files)):
+                file_path = file_paths[i]
+                content = files[i].file.read()
+                metadata = metadatas[i] if metadatas else None
+                if override is False:
+                    file_path = self._gen_unique_filepath(file_path)
+                with open(file_path, 'wb') as f: f.write(content)
+                msg = 'success'
+                doc_id = gen_docid(file_path)
+                if paths_is_new[i]:
+                    docs = self._manager.add_files(
+                        [file_path], metadatas=[metadata], status=DocListManager.Status.success)
+                    if not docs:
+                        msg = f'Failed: path {file_path} already exists in Database.'
+                else:
+                    self._manager.update_kb_group(cond_file_ids=[doc_id], new_need_reparse=True)
+                    msg = f'Success: path {file_path} will be reparsed.'
+                ids.append(doc_id)
+                results.append(msg)
+            return BaseResponse(data=[ids, results])
+        except Exception as e:
+            lazyllm.LOG.error(f'upload_files exception: {e}')
+            return BaseResponse(code=500, msg=str(e), data=None)
